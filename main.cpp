@@ -5,23 +5,17 @@
 ///    -2 - TCP server failed to bind to destination address and port.
 ///    -3 - UDP socket failed to bind to source address and port.
 ///
-#include <iostream>
-
-#include <QCoreApplication>
-#include <QStringList>
-#include <QMap>
+/// TESTING THE APPLICATION
+///    Use 'nc 127.0.0.1 65001' to open a TCP connection.
+///    Use 'nc -u 127.0.0.1 65000' to send UDP packets.
+///
+#include <QtCore/QCommandLineParser>
+#include <QtCore/QCoreApplication>
+#include <QtCore/QStringList>
+#include <QtCore/QMap>
 
 #include "networkpipe.h"
 
-
-QMap<QString, QString> readArguments(const QStringList& arguments,
-                                     bool* error = nullptr);
-
-/*#include <QJsonArray>
-#include <QJsonDocument>
-#include <QVariant>
-#include <QJsonObject>
-#include <QDebug>*/
 
 ///
 /// \brief Checks the application's arguments and Initializes the pipe
@@ -30,40 +24,37 @@ QMap<QString, QString> readArguments(const QStringList& arguments,
 int main(int argc, char** argv)
 {
     QCoreApplication a(argc, argv);
+    QCoreApplication::setApplicationName("qtpipe");
+    QCoreApplication::setApplicationVersion("1.0");
 
+    QCommandLineParser parser;
+    parser.setApplicationDescription("UDP to TCP forwarding tool.");
+    parser.addHelpOption();
+    parser.addVersionOption();
+    parser.addPositionalArgument(
+                "udp-port",
+                "The UDP port where to accept packets from.");
+    parser.addPositionalArgument(
+                "tcp-port",
+                "The TCP port where client connections are accepted from.");
 
-    // JSON Demo
-    /*QVariantMap m;
-    m["version"] = 3;
+    parser.process(a.arguments());
 
-    QVariantMap t;
-    t["a"] = 10;
+    // Check if all positional arguments are set.
+    QStringList arguments = parser.positionalArguments();
+    if (arguments.count() != 2)
+        parser.showHelp(-1);
 
-    QVariantMap b;
-    b["b"] = 4.5f;
+    // Parse the positional arguments.
+    bool conversionOk = false;
 
-    QJsonArray o;
-    o.append(QJsonValue::fromVariant(t));
-    o.append(QJsonValue::fromVariant(b));
+    quint16 sourcePort = arguments.at(0).toUShort(&conversionOk);
+    if (conversionOk == false)
+        parser.showHelp(-2);
 
-    m["o"] = o.toVariantList();
-
-    QJsonDocument doc(QJsonValue::fromVariant(m).toObject());
-    qDebug() << doc.toJson(QJsonDocument::Compact);*/
-
-
-    // Extract and check arguments.
-    bool hasArgumentError = false;
-    QMap<QString, QString> arguments = readArguments(
-                QCoreApplication::arguments(),
-                &hasArgumentError);
-    if (hasArgumentError == true) {
-        std::cout << "Usage: qtpipe --source-port=[PORT] "
-                     "--source-address=[ADDRESS] --destination-port=[PORT] "
-                     "--destination-address=[ADDRESS]"
-                  << std::endl;
-        return -1;
-    }
+    quint16 destinationPort = arguments.at(1).toUShort(&conversionOk);
+    if (conversionOk == false)
+        parser.showHelp(-2);
 
 
     // Initialize the NetworkPipe.
@@ -72,11 +63,8 @@ int main(int argc, char** argv)
 
     // Pass the arguments to the pipe and check for errors.
     int initializationError = 0;
-    pipe->initialize(arguments["sourcePort"].toUShort(),
-            arguments["sourceAddress"],
-            arguments["destinationPort"].toUShort(),
-            arguments["destinationAddress"],
-            &initializationError);
+    pipe->initialize(sourcePort, destinationPort, &initializationError);
+
     if (initializationError == -1)
         return -2;
     else if (initializationError == -2)
@@ -84,78 +72,4 @@ int main(int argc, char** argv)
 
 
     return a.exec();
-}
-
-///
-/// \brief readArguments
-///
-/// \param arguments
-/// \param error
-///
-/// \return
-///
-QMap<QString, QString> readArguments(const QStringList& arguments,
-                                     bool* error)
-{
-    int sourcePortIndex = arguments.indexOf("--source-port");
-    int sourceAddressIndex = arguments.indexOf("--source-address");
-    int destinationPortIndex = arguments.indexOf("--destination-port");
-    int destinationAddressIndex = arguments.indexOf("--destination-address");
-
-    // Check if all needed arguments are available.
-    if (sourcePortIndex == -1 || sourceAddressIndex == -1 ||
-            destinationPortIndex == -1 || destinationAddressIndex == -1) {
-        if (error != nullptr)
-            *error = true;
-
-        return QMap<QString, QString>();
-    }
-
-
-    // Extract the relevant arguments.
-    QMap<QString, QString> parameters;
-    parameters["sourcePort"] = arguments.at(
-                sourcePortIndex + 1);
-    parameters["sourceAddress"] = arguments.at(
-                sourceAddressIndex + 1);
-    parameters["destinationPort"] = arguments.at(
-                destinationPortIndex + 1);
-    parameters["destinationAddress"] = arguments.at(
-                destinationAddressIndex + 1);
-
-
-    // Check if the given ports are in range.
-    bool conversionOk = false;
-    int sourcePort = parameters["sourcePort"].toInt(&conversionOk);
-    if (conversionOk == false) {
-        if (error != nullptr)
-            *error = true;
-
-        return QMap<QString, QString>();
-    }
-
-    int destinationPort = parameters["destinationPort"].toInt(&conversionOk);
-    if (conversionOk == false) {
-        if (error != nullptr)
-            *error = true;
-
-        return QMap<QString, QString>();
-    }
-
-    if (sourcePort < 0 || sourcePort > 65335 ||
-            destinationPort < 0 || destinationPort > 65535) {
-        if (error != nullptr)
-            *error = true;
-
-        return QMap<QString, QString>();
-    }
-
-
-    //! \todo Check if the given addresses are valid.
-
-
-    if (error != nullptr)
-        *error = false;
-
-    return parameters;
 }

@@ -20,9 +20,7 @@ public:
     explicit NetworkPipe(QObject* parent = nullptr);
 
     void initialize(quint16 sourcePort,
-                    const QString& sourceAddress,
                     quint16 destinationPort,
-                    const QString& destinationAddress,
                     int* error = nullptr);
 
 private:

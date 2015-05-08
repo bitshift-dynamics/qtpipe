@@ -1,12 +1,12 @@
 #include "networkpipe.h"
 
-#include <iostream>
+#include <QtCore/QCoreApplication>
+#include <QtCore/QDateTime>
+#include <QtCore/QList>
 
-#include <QCoreApplication>
-#include <QUdpSocket>
-#include <QTcpSocket>
-#include <QTcpServer>
-#include <QList>
+#include <QtNetwork/QUdpSocket>
+#include <QtNetwork/QTcpSocket>
+#include <QtNetwork/QTcpServer>
 
 
 class NetworkPipePrivate : public QObject
@@ -82,6 +82,10 @@ void NetworkPipePrivate::handleIncomingConnection()
         QTcpSocket* clientConnection = outputServer->nextPendingConnection();
         Q_CHECK_PTR(clientConnection);
 
+        qDebug() << QDateTime::currentDateTime()
+                 << "New client connected"
+                 << clientConnection->localAddress().toString();
+
         // Handle client connection errors.
         isConnected = connect(
                     clientConnection,
@@ -128,8 +132,20 @@ void NetworkPipePrivate::forwardData()
 
     // Receive all data.
     QByteArray data;
+    QHostAddress senderAddress;
+    quint16 senderPort;
+
     data.resize(server->pendingDatagramSize());
-    server->readDatagram(data.data(), data.size());
+    server->readDatagram(data.data(),
+                         data.size(),
+                         &senderAddress,
+                         &senderPort);
+
+    qDebug() << QDateTime::currentDateTime()
+             << "Received datagram from"
+             << senderAddress.toString()
+             << "@"
+             << senderPort;
 
     // Forward the data to all connected clients.
     foreach (QTcpSocket* client, clientConnections)
@@ -150,28 +166,24 @@ NetworkPipe::NetworkPipe(QObject *parent) :
 ///        sockets to the given parameters.
 ///
 /// \param sourcePort The port the UDP socket shall listen to.
-/// \param sourceAddress The address the UDP socket shall be bound to.
 /// \param destinationPort The port the TCP server shall listen to.
-/// \param destinationAddress The address the TCP server shall listen on.
 ///
 /// \param error If set to a valid intptr error will contain 0 on success,
 ///              -1 if the TCP server failed to listen and -2 if the UDP
 ///              socket failed to bind.
 ///
 void NetworkPipe::initialize(quint16 sourcePort,
-                             const QString& sourceAddress,
                              quint16 destinationPort,
-                             const QString& destinationAddress,
                              int* error)
 {
     Q_D(NetworkPipe);
 
     // Enable the TCP server.
     bool isServerListening = d->outputServer->listen(
-                QHostAddress(destinationAddress),
+                QHostAddress::Any,
                 destinationPort);
     if (isServerListening == false) {
-        std::cout << "TCP Server failed to listen." << std::endl;
+        qDebug() << "TCP Server failed to listen.";
         if (error != nullptr)
             *error = -1;
 
@@ -182,11 +194,11 @@ void NetworkPipe::initialize(quint16 sourcePort,
     // Enable the UDP receiver. The bind shall be exclusive to get an error
     // if there is already a service bound to the given address/port.
     bool isInputListening = d->inputSocket->bind(
-                QHostAddress(sourceAddress),
+                QHostAddress::Any,
                 sourcePort,
                 QAbstractSocket::DontShareAddress);
     if (isInputListening == false) {
-        std::cout << "UDP Socket failed to bind." << std::endl;
+        qDebug() << "UDP Socket failed to bind.";
         if (error != nullptr)
             *error = -2;
 
